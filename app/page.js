@@ -21,7 +21,9 @@ import {
   MessageSquare,
   Sun,
   Moon,
-  RotateCcw
+  RotateCcw,
+  Camera,
+  CameraOff
 } from "lucide-react";
 
 export default function Home() {
@@ -31,8 +33,10 @@ export default function Home() {
 
   // API Config (saved to localStorage)
   const [apiKey, setApiKey] = useState("");
-  const [modelName, setModelName] = useState("gemma-3-27b-it");
+  const [modelName, setModelName] = useState("gemma-4-31b-it");
   const [connectionStatus, setConnectionStatus] = useState("idle"); // idle, testing, success, error
+  const [connectionError, setConnectionError] = useState("");
+  const [saveStatus, setSaveStatus] = useState("idle"); // idle, saved
 
   // Fasting Mode & Credits Wallet
   const [fastingMode, setFastingMode] = useState(false);
@@ -46,17 +50,33 @@ export default function Home() {
   const [ingestOutput, setIngestOutput] = useState("");
   const [ingestLoading, setIngestLoading] = useState(false);
 
-  // Posture Check Camera
-  const [cameraActive, setCameraActive] = useState(false);
-  const [postureStatus, setPostureStatus] = useState("Awaiting Calibration");
+  // Posture Scanner State
+  const [postureOutput, setPostureOutput] = useState("");
+  const [postureLoading, setPostureLoading] = useState(false);
+  const [webcamActive, setWebcamActive] = useState(false);
+  const [postureImagePreview, setPostureImagePreview] = useState(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
-  const [showSomaticBreak, setShowSomaticBreak] = useState(false);
-  const [breathingStep, setBreathingStep] = useState("Inhale");
-  const [journalText, setJournalText] = useState("");
 
-  // Simulated listening state
+  // Stop webcam when switching tabs
+  useEffect(() => {
+    if (activeTab !== "posture") {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      setWebcamActive(false);
+    }
+  }, [activeTab]);
+
+  // Voice recognition
   const [isListening, setIsListening] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+  const recognitionRef = useRef(null);
+  const voiceTranscriptRef = useRef(""); // keeps transcript fresh inside async closures
+
+  // Keep ref in sync with state
+  useEffect(() => { voiceTranscriptRef.current = voiceTranscript; }, [voiceTranscript]);
 
   // Main Chat System
   const [chatMessages, setChatMessages] = useState([
@@ -80,11 +100,24 @@ export default function Home() {
     if (savedTheme === "light") setIsDarkMode(false);
   }, []);
 
-  // Save Config
+  // Save Config — shows "Saved!" flash
   const saveConfig = () => {
     localStorage.setItem("minktilet_api_key", apiKey);
     localStorage.setItem("minktilet_model_name", modelName);
     setConnectionStatus("idle");
+    setConnectionError("");
+    setSaveStatus("saved");
+    setTimeout(() => setSaveStatus("idle"), 1500);
+  };
+
+  // Clear saved config (wipe localStorage cache)
+  const clearConfig = () => {
+    localStorage.removeItem("minktilet_api_key");
+    localStorage.removeItem("minktilet_model_name");
+    setApiKey("");
+    setModelName("gemma-4-31b-it");
+    setConnectionStatus("idle");
+    setConnectionError("");
   };
 
   // Toggle Theme
@@ -94,92 +127,30 @@ export default function Home() {
     localStorage.setItem("minktilet_theme", nextMode ? "dark" : "light");
   };
 
-  // Connection Test Handshake
+  // Connection Test
   const testConnection = async () => {
     setConnectionStatus("testing");
-
+    setConnectionError("");
     try {
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          type: "text_prompt", 
-          payload: "Hello. Just say hi to test.", 
-          fastingMode,
-          apiKey: apiKey || null,
-          modelName: modelName || null
-        })
+        body: JSON.stringify({ type: "text_prompt", payload: "hi", fastingMode, apiKey }),
       });
       const data = await response.json();
-      
       if (data.success) {
         setConnectionStatus("success");
       } else {
         setConnectionStatus("error");
+        const errLog = data.logs?.[0] || "";
+        setConnectionError(errLog.replace("[ERROR] ", "") || "Connection failed.");
       }
-    } catch (err) {
+    } catch {
       setConnectionStatus("error");
+      setConnectionError("Network error.");
     }
   };
 
-  // Somatic break breathing cycle
-  useEffect(() => {
-    let interval;
-    if (showSomaticBreak) {
-      interval = setInterval(() => {
-        setBreathingStep((prev) => {
-          if (prev === "Inhale") return "Hold";
-          if (prev === "Hold") return "Exhale";
-          return "Inhale";
-        });
-      }, 4000);
-    }
-    return () => clearInterval(interval);
-  }, [showSomaticBreak]);
-
-  // Webcam camera
-  const toggleCamera = async () => {
-    try {
-      if (cameraActive) {
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
-        }
-        setCameraActive(false);
-        setPostureStatus("Awaiting Calibration");
-        return;
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-      streamRef.current = stream;
-      setCameraActive(true);
-      setPostureStatus("Checking posture");
-      
-      setTimeout(() => {
-        setPostureStatus("Good Posture");
-      }, 2000);
-    } catch (err) {
-      alert("Please allow camera access in your browser.");
-    }
-  };
-
-  const forceSlouch = () => {
-    if (!cameraActive) {
-      alert("Please turn on the camera first.");
-      return;
-    }
-    setPostureStatus("Bad Posture (Slouching)");
-    setTimeout(() => {
-      setShowSomaticBreak(true);
-    }, 1500);
-  };
-
-  const endSomaticBreak = () => {
-    setShowSomaticBreak(false);
-    setPostureStatus("Good Posture");
-    setWellCredits(prev => prev + 150);
-  };
 
   // Ingest API handler
   const executeIngest = async (type, payload) => {
@@ -190,31 +161,174 @@ export default function Home() {
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          type, 
-          payload, 
-          fastingMode,
-          apiKey: apiKey || null,
-          modelName: modelName || null
-        })
+        body: JSON.stringify({ type, payload, fastingMode, apiKey })
       });
       const data = await response.json();
       setIngestOutput(data.answer);
-    } catch (err) {
-      setIngestOutput("Connection error. Check settings.");
+    } catch {
+      setIngestOutput("Connection error.");
     } finally {
       setIngestLoading(false);
     }
   };
 
-  // Audio Voice Recorder Simulator
-  const handleVoiceOrbClick = () => {
-    if (isListening) {
-      setIsListening(false);
-      executeIngest("audio_prompt", "I feel tired and my neck hurts.");
-    } else {
-      setIsListening(true);
+
+  // Webcam and Posture scan functions
+  const startWebcam = async () => {
+    setPostureImagePreview(null);
+    setPostureOutput("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: "user" } });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setWebcamActive(true);
+    } catch (err) {
+      console.error("Error accessing webcam:", err);
+      alert("Could not start webcam. Please grant permissions or try uploading a picture.");
     }
+  };
+
+  const stopWebcam = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setWebcamActive(false);
+  };
+
+  const capturePosture = async () => {
+    if (!videoRef.current) return;
+    setPostureLoading(true);
+    setPostureOutput("");
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = videoRef.current.videoWidth || 640;
+      canvas.height = videoRef.current.videoHeight || 480;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg");
+      const base64Data = dataUrl.split(",")[1];
+
+      const response = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "webcam_posture",
+          imageData: base64Data,
+          imageMime: "image/jpeg",
+          fastingMode,
+          apiKey
+        })
+      });
+      const data = await response.json();
+      setPostureOutput(data.answer);
+      stopWebcam();
+    } catch (error) {
+      console.error(error);
+      setPostureOutput("Error analyzing posture. Please check your connection.");
+    } finally {
+      setPostureLoading(false);
+    }
+  };
+
+  const handlePostureImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    stopWebcam();
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setPostureImagePreview(event.target.result);
+      setPostureOutput("");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const analyzeUploadedPosture = async () => {
+    if (!postureImagePreview) return;
+    setPostureLoading(true);
+    setPostureOutput("");
+
+    try {
+      const base64Data = postureImagePreview.split(",")[1];
+      const response = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "webcam_posture",
+          imageData: base64Data,
+          imageMime: "image/jpeg",
+          fastingMode,
+          apiKey
+        })
+      });
+      const data = await response.json();
+      setPostureOutput(data.answer);
+    } catch (error) {
+      console.error(error);
+      setPostureOutput("Error analyzing posture. Please check your connection.");
+    } finally {
+      setPostureLoading(false);
+    }
+  };
+
+
+  // Real Voice Recognition using Web Speech API
+  const handleVoiceOrbClick = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Voice recognition not supported in this browser. Try Chrome.");
+      return;
+    }
+
+    if (isListening && recognitionRef.current) {
+      // Stop listening — will trigger onend → sends transcript
+      recognitionRef.current.stop();
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognitionRef.current = recognition;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      setVoiceTranscript("Listening...");
+    };
+
+    recognition.onresult = (event) => {
+      const interim = Array.from(event.results)
+        .map((r) => r[0].transcript)
+        .join("");
+      setVoiceTranscript(interim);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      const finalText = voiceTranscriptRef.current || "";
+      setVoiceTranscript("");
+      if (finalText.trim()) {
+        sendChatMessage(null, finalText.trim());
+      }
+    };
+
+    recognition.onerror = (e) => {
+      setIsListening(false);
+      setVoiceTranscript("");
+      if (e.error !== "no-speech") {
+        alert(`Voice error: ${e.error}`);
+      }
+    };
+
+    recognition.start();
   };
 
   // PDF Text file reader (Fully functional)
@@ -244,31 +358,25 @@ export default function Home() {
   };
 
   // Chat message send
-  const sendChatMessage = async (e) => {
-    e.preventDefault();
-    if (!chatInput.trim()) return;
+  const sendChatMessage = async (e, directText = null) => {
+    if (e) e.preventDefault();
+    const userMessage = directText || chatInput;
+    if (!userMessage.trim()) return;
 
-    const userMessage = chatInput;
     setChatMessages(prev => [...prev, { role: "user", content: userMessage }]);
-    setChatInput("");
+    if (!directText) setChatInput("");
     setChatLoading(true);
 
     try {
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          type: "text_prompt", 
-          payload: userMessage, 
-          fastingMode,
-          apiKey: apiKey || null,
-          modelName: modelName || null
-        })
+        body: JSON.stringify({ type: "text_prompt", payload: userMessage, fastingMode, apiKey })
       });
       const data = await response.json();
       setChatMessages(prev => [...prev, { role: "assistant", content: data.answer }]);
-    } catch (err) {
-      setChatMessages(prev => [...prev, { role: "assistant", content: "Connection failed. Please check settings." }]);
+    } catch {
+      setChatMessages(prev => [...prev, { role: "assistant", content: "⚠️ Network error." }]);
     } finally {
       setChatLoading(false);
     }
@@ -396,16 +504,34 @@ export default function Home() {
                     Thinking...
                   </div>
                 )}
+                {isListening && (
+                  <div className={`p-3 rounded-lg max-w-[85%] text-xs border mr-auto animate-pulse ${themePanel} flex items-center gap-2`}>
+                    <Mic className="w-3.5 h-3.5 text-red-500 animate-bounce" />
+                    <span>{voiceTranscript || "Listening..."}</span>
+                  </div>
+                )}
               </div>
 
               {/* Chat Input */}
-              <form onSubmit={sendChatMessage} className={`flex gap-2 border-t pt-3 ${themeBorder}`}>
+              <form onSubmit={sendChatMessage} className={`flex gap-2 border-t pt-3 ${themeBorder} items-center`}>
+                <button
+                  type="button"
+                  onClick={handleVoiceOrbClick}
+                  className={`p-2.5 rounded transition-all border ${
+                    isListening 
+                      ? "bg-red-500 text-white animate-pulse border-red-500" 
+                      : themeBtnMuted
+                  }`}
+                  title="Voice input"
+                >
+                  <Mic className="w-4 h-4" />
+                </button>
                 <input 
                   type="text" 
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   disabled={chatLoading}
-                  placeholder="Type a message here..."
+                  placeholder={isListening ? "Listening..." : "Type a message here..."}
                   className={`flex-1 rounded px-3 py-2 text-xs focus:outline-none border ${themeInput}`}
                 />
                 <button 
@@ -420,69 +546,142 @@ export default function Home() {
             </div>
           )}
 
-          {/* VIEW 2: POSTURE CAMERA CHECK */}
+
+          {/* VIEW 2: POSTURE SCANNER */}
           {activeTab === "posture" && (
-            <div className="flex-1 flex flex-col justify-between gap-6">
-              
-              <div className="flex flex-col gap-1">
-                <h3 className="font-serif text-sm font-bold uppercase tracking-wider">Camera Posture Check</h3>
-                <p className={`text-xs ${themeTextMuted}`}>Check your sitting posture using your webcam feed.</p>
+            <div className="flex-1 flex flex-col gap-5">
+              <div>
+                <h3 className="font-serif text-sm uppercase tracking-wider font-bold mb-1">Backbone & Posture Scan</h3>
+                <p className={`text-xs ${themeTextMuted}`}>Real-time visual cervical spine alignment monitor targeting ergonomic fatigue.</p>
               </div>
 
-              {/* Central Voice orb trigger */}
-              <div className="flex flex-col items-center gap-3">
-                <button 
-                  onClick={handleVoiceOrbClick}
-                  className={`w-20 h-20 rounded-full border flex items-center justify-center transition-all ${
-                    isListening ? "animate-pulse border-white bg-zinc-800" : `${themeBorder} hover:bg-zinc-100 dark:hover:bg-zinc-800`
-                  }`}
-                >
-                  <Mic className="w-6 h-6" />
-                </button>
-                <span className="text-[10px] uppercase tracking-wider text-zinc-400">Click to record voice note</span>
-              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+                {/* Camera / Feed Viewport */}
+                <div className={`border p-4 rounded-lg flex flex-col gap-3 items-center relative overflow-hidden ${themeBg} ${themeBorder}`}>
+                  <span className="text-[10px] font-bold uppercase tracking-wider self-start flex items-center gap-1.5">
+                    <Activity className="w-3.5 h-3.5 text-zinc-500 animate-pulse" />
+                    Biometric Video Stream
+                  </span>
 
-              {/* Camera Preview */}
-              <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 border-t pt-4 border-zinc-200 dark:border-zinc-800">
-                <div className="flex flex-col gap-2">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className={themeTextMuted}>Webcam feed:</span>
-                    <span className={`font-bold px-2 py-0.5 border rounded text-[9px] uppercase ${
-                      postureStatus.includes("Good") ? "bg-zinc-500/10 text-zinc-400" :
-                      postureStatus.includes("Bad") ? "bg-red-500/10 text-red-500 animate-pulse border-red-500/20" :
-                      "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"
-                    }`}>
-                      {postureStatus}
-                    </span>
-                  </div>
+                  <div className="w-full aspect-video rounded-lg border border-zinc-800 bg-black flex items-center justify-center relative overflow-hidden">
+                    {/* Scanning overlay line */}
+                    {(webcamActive || postureImagePreview) && (
+                      <div className="absolute left-0 w-full h-[2px] bg-[#c5a880]/60 shadow-[0_0_10px_#c5a880] animate-[scan_2s_infinite_ease-in-out] z-10"></div>
+                    )}
 
-                  <div className={`aspect-video border rounded-lg overflow-hidden flex items-center justify-center ${themeBg} ${themeBorder}`}>
-                    {!cameraActive ? (
-                      <Video className="w-6 h-6 opacity-30" />
+                    {webcamActive ? (
+                      <video 
+                        ref={videoRef} 
+                        autoPlay 
+                        playsInline 
+                        muted 
+                        className="w-full h-full object-cover rounded-lg scale-x-[-1]"
+                      />
+                    ) : postureImagePreview ? (
+                      <img 
+                        src={postureImagePreview} 
+                        alt="Posture upload preview" 
+                        className="w-full h-full object-contain rounded-lg"
+                      />
                     ) : (
-                      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
+                      <div className="flex flex-col items-center gap-2 text-zinc-600">
+                        <Video className="w-8 h-8 opacity-45" />
+                        <span className="text-[10px]">No Active Video Stream</span>
+                      </div>
                     )}
                   </div>
+
+                  <div className="flex flex-wrap gap-2 w-full">
+                    {webcamActive ? (
+                      <>
+                        <button 
+                          onClick={capturePosture}
+                          disabled={postureLoading}
+                          className={`flex-1 py-2 rounded text-xs uppercase font-bold tracking-wider transition-all ${themeBtn}`}
+                        >
+                          Scan Posture
+                        </button>
+                        <button 
+                          onClick={stopWebcam}
+                          className={`px-3 py-2 rounded text-xs uppercase font-bold tracking-wider transition-all ${themeBtnMuted}`}
+                        >
+                          Stop
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button 
+                          onClick={startWebcam}
+                          className={`flex-1 py-2 rounded text-xs uppercase font-bold tracking-wider transition-all ${themeBtn}`}
+                        >
+                          Start Camera
+                        </button>
+                        
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={handlePostureImageUpload} 
+                          className="hidden" 
+                          id="posture-upload" 
+                        />
+                        <label 
+                          htmlFor="posture-upload" 
+                          className={`px-3 py-2 rounded text-xs uppercase font-bold tracking-wider cursor-pointer border text-center transition-all ${themeBtnMuted}`}
+                        >
+                          Upload
+                        </label>
+                      </>
+                    )}
+                  </div>
+
+                  {postureImagePreview && !webcamActive && (
+                    <button
+                      onClick={analyzeUploadedPosture}
+                      disabled={postureLoading}
+                      className={`w-full py-2 rounded text-xs uppercase font-bold tracking-wider transition-all ${themeBtn}`}
+                    >
+                      Analyze Uploaded Photo
+                    </button>
+                  )}
                 </div>
 
-                <div className="flex flex-col justify-end gap-2">
-                  <button 
-                    onClick={toggleCamera}
-                    className={`w-full py-2 rounded text-xs uppercase font-bold tracking-wider transition-colors border ${themeBtnMuted}`}
-                  >
-                    {cameraActive ? "Turn Off Camera" : "Turn On Camera"}
-                  </button>
-                  <button 
-                    onClick={forceSlouch}
-                    className="w-full bg-zinc-950 text-white dark:bg-white dark:text-black font-bold py-2 rounded text-xs uppercase tracking-wider hover:opacity-95 transition-opacity"
-                  >
-                    Test Posture Alert (Bad posture)
-                  </button>
+                {/* Analysis / Diagnostics */}
+                <div className="flex flex-col gap-3 w-full h-full justify-between">
+                  <div className={`border p-4 rounded-lg flex-1 flex flex-col gap-3 min-h-[160px] ${themeBg} ${themeBorder}`}>
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Ergonomic Diagnostics</span>
+                    <div className="flex-1 flex flex-col justify-center">
+                      {postureLoading ? (
+                        <div className="flex items-center gap-2 text-zinc-400 justify-center py-6">
+                          <Loader className="w-5 h-5 animate-spin" />
+                          <span className="text-xs">Analyzing spinal curvature...</span>
+                        </div>
+                      ) : postureOutput ? (
+                        <div className="text-xs leading-relaxed font-medium">
+                          {postureOutput}
+                        </div>
+                      ) : (
+                        <div className={`text-xs text-center py-6 ${themeTextMuted}`}>
+                          Activate camera or upload photo to initiate real-time posture analysis.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Somatic grounding reminder / tips banner */}
+                  <div className={`border border-amber-500/20 bg-amber-500/5 p-3.5 rounded-lg text-xs flex gap-2.5 items-start`}>
+                    <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="block text-amber-600 dark:text-amber-400 mb-0.5">Somatic Defense Tip</strong>
+                      <span className="text-[11px] opacity-80 leading-normal font-medium">
+                        Addis professionals experience 40% higher musculoskeletal stiffness. Keep your display at eye level and schedule a **Kibe Somatic Compressing** if neck stress persists.
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
-
             </div>
           )}
+
 
           {/* VIEW 3: INGESTION FILES */}
           {activeTab === "ingest" && (
@@ -576,68 +775,46 @@ export default function Home() {
             <div className="flex-1 flex flex-col gap-6">
               
               <div>
-                <h3 className="font-serif text-sm uppercase tracking-wider font-bold mb-1">API Key & Fasting Settings</h3>
-                <p className={`text-xs ${themeTextMuted}`}>Enter your API Key and configure options below.</p>
+                <h3 className="font-serif text-sm uppercase tracking-wider font-bold mb-1">Settings</h3>
+                <p className={`text-xs ${themeTextMuted}`}>MinkTilet runs on Gemma 4 31B — no setup needed.</p>
               </div>
 
               <div className="bg-[#fcfcfc] dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-lg p-4 flex flex-col gap-4">
-                
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Google AI Studio API Key:</label>
-                  <input 
-                    type="password" 
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="Enter Key here..."
-                    className={`rounded px-3 py-1.5 text-xs focus:outline-none border ${themeInput}`}
-                  />
-                </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Model Name:</label>
-                  <input 
-                    type="text" 
-                    value={modelName}
-                    onChange={(e) => setModelName(e.target.value)}
-                    placeholder="gemma-3-27b-it"
-                    className={`rounded px-3 py-1.5 text-xs focus:outline-none border ${themeInput}`}
-                  />
-                  <span className="text-[9px] text-zinc-400">Gemma 4: gemma-3-27b-it &nbsp;|&nbsp; Fast: gemma-3-4b-it &nbsp;|&nbsp; Gemini: gemini-2.0-flash</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <button 
-                    onClick={saveConfig}
-                    className={`py-2 rounded text-xs uppercase font-bold tracking-wider border transition-colors ${themeBtnMuted}`}
-                  >
-                    Save Config
-                  </button>
-                  <button 
-                    onClick={testConnection}
-                    disabled={connectionStatus === "testing"}
-                    className={`py-2 rounded text-xs uppercase font-bold tracking-wider transition-all flex items-center justify-center gap-1 ${themeBtn}`}
-                  >
-                    {connectionStatus === "testing" && <Loader className="w-3.5 h-3.5 animate-spin" />}
-                    Test Connection
-                  </button>
-                </div>
-
-                {connectionStatus !== "idle" && (
-                  <div className={`p-2.5 rounded text-xs flex items-center gap-2 border ${
-                    connectionStatus === "testing" ? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20" :
-                    connectionStatus === "success" ? "bg-zinc-500/10 text-zinc-100 border-zinc-500/30" :
-                    "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"
-                  }`}>
-                    {connectionStatus === "testing" && <Loader className="w-4 h-4 animate-spin" />}
-                    {connectionStatus === "success" && <CheckCircle className="w-4 h-4" />}
-                    {connectionStatus === "error" && <XCircle className="w-4 h-4" />}
-                    <span>
-                      {connectionStatus === "testing" && "Testing key connection..."}
-                      {connectionStatus === "success" && `Success! Target model connected: ${modelName}`}
-                      {connectionStatus === "error" && "Failed. Running in Offline Fallback."}
-                    </span>
+                {/* Connection status row */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold block">AI Connection</span>
+                      <span className={`text-[10px] ${themeTextMuted}`}>Gemma 4 31B · Google AI Studio</span>
+                    </div>
+                    <button 
+                      onClick={testConnection}
+                      disabled={connectionStatus === "testing"}
+                      className={`px-4 py-1.5 rounded text-xs uppercase font-bold tracking-wider transition-all flex items-center gap-1.5 disabled:opacity-50 ${themeBtn}`}
+                    >
+                      {connectionStatus === "testing" && <Loader className="w-3.5 h-3.5 animate-spin" />}
+                      {connectionStatus === "testing" ? "Testing..." : "Test Connection"}
+                    </button>
                   </div>
-                )}
+
+                  {connectionStatus !== "idle" && (
+                    <div className={`p-2.5 rounded text-xs flex items-center gap-2 border ${
+                      connectionStatus === "testing" ? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20" :
+                      connectionStatus === "success" ? "bg-green-500/10 text-green-300 border-green-500/30" :
+                      "bg-red-500/10 text-red-400 border-red-500/30"
+                    }`}>
+                      {connectionStatus === "testing" && <Loader className="w-4 h-4 animate-spin flex-shrink-0" />}
+                      {connectionStatus === "success" && <CheckCircle className="w-4 h-4 flex-shrink-0" />}
+                      {connectionStatus === "error" && <XCircle className="w-4 h-4 flex-shrink-0" />}
+                      <span>
+                        {connectionStatus === "testing" && "Connecting to Gemma 4..."}
+                        {connectionStatus === "success" && "✓ Gemma 4 31B connected and ready"}
+                        {connectionStatus === "error" && (connectionError || "Connection failed.")}
+                      </span>
+                    </div>
+                  )}
+                </div>
 
                 <div className="flex justify-between items-center text-xs border-t pt-4 border-zinc-200 dark:border-zinc-800">
                   <div>
@@ -676,56 +853,7 @@ export default function Home() {
         </div>
       </main>
 
-      {/* OVERLAY: SOMATIC BREAK OVERLAY */}
-      {showSomaticBreak && (
-        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-[#18181b] border border-[#27272a] rounded-xl p-8 flex flex-col items-center gap-6 shadow-2xl text-white">
-            
-            <div className="flex items-center gap-2 text-zinc-300">
-              <AlertTriangle className="w-5 h-5 animate-pulse" />
-              <span className="font-serif text-sm tracking-wider uppercase font-bold">Posture Alert</span>
-            </div>
-            
-            <p className="text-xs text-zinc-400 text-center leading-relaxed">
-              Workspace paused due to slouching. Sit back, drop your shoulders, and complete this 3-minute breath cycle.
-            </p>
 
-            {/* Breathing animation */}
-            <div className="relative w-32 h-32 flex items-center justify-center">
-              <div 
-                className={`absolute inset-0 rounded-full border border-white/40 transition-transform duration-[4000ms] ease-in-out ${
-                  breathingStep === "Inhale" ? "scale-100 bg-white/5" :
-                  breathingStep === "Hold" ? "scale-105 bg-white/10 animate-pulse" :
-                  "scale-75 bg-white/0"
-                }`}
-              />
-              <span className="text-[10px] font-bold tracking-widest uppercase z-10">{breathingStep}</span>
-            </div>
-
-            <div className="w-full bg-zinc-900 border border-zinc-800 rounded p-3 flex justify-between items-center text-xs">
-              <span className="flex items-center gap-1.5"><Volume2 className="w-4 h-4 text-zinc-400" /> Sound resonance</span>
-              <span className="text-[10px] text-zinc-400 font-bold">Resonating</span>
-            </div>
-
-            <div className="w-full flex flex-col gap-1.5">
-              <span className="text-[10px] uppercase text-zinc-500 tracking-wider">How do you feel?</span>
-              <textarea 
-                value={journalText} 
-                onChange={(e) => setJournalText(e.target.value)}
-                placeholder="Type here..." 
-                className="w-full bg-zinc-950 border border-zinc-800 rounded p-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-white h-14 resize-none"
-              />
-            </div>
-
-            <button 
-              onClick={endSomaticBreak}
-              className="w-full bg-white text-black font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider hover:bg-zinc-200 transition-all"
-            >
-              Resume (+150 Credits)
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* OVERLAY: BOOKING & CHECKOUT MODAL */}
       {showBookingModal && (
