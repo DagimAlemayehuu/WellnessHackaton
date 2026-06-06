@@ -1,0 +1,47 @@
+[
+  {
+    "id": "tenadam",
+    "name": "Tenadam (Feverfew / Rue of Grace)",
+    "type": "herb",
+    "indications": ["headache", "migraine", "anxiety", "muscle tension", "fatigue"],
+    "preparation": "Infuse 3-4 leaves in hot water with local organic honey, or crush fresh leaves and breathe in the aroma for immediate sinus relief.",
+    "scientificBasis": "Contains parthenolide which inhibits serotonin release and reduces inflammatory spasms in blood vessels.",
+    "warning": "Do not consume in high quantities during pregnancy."
+  },
+  {
+    "id": "damakese",
+    "name": "Damakese (Indigenous Ocimum lamiifolium)",
+    "type": "herb",
+    "indications": ["respiratory stress", "burnout", "mental fatigue", "fever", "congestion"],
+    "preparation": "Squeeze fresh leaves to extract the juice and drink raw, or inhale vapor from leaves boiled in pure spring water.",
+    "scientificBasis": "Rich in essential oils (sabinene, pinene) with proven anti-inflammatory and bronchodilatory properties.",
+    "warning": "Bitter taste; consume with water or tea."
+  },
+  {
+    "id": "moringa",
+    "name": "Moringa (Shiferaw)",
+    "type": "superfood",
+    "indications": ["undernutrition", "fasting fatigue", "metabolic strain", "muscle recovery"],
+    "preparation": "Mix 1 teaspoon of dried organic moringa leaf powder into warm water or teff-based porridge during morning/evening meals.",
+    "scientificBasis": "High content of plant protein, vitamin C, iron, and calcium to counteract maternal and athletic undernutrition during strict fasting phases.",
+    "warning": "None for standard dietary doses."
+  },
+  {
+    "id": "tsedey_tea",
+    "name": "Tsedey Blend (Ginger, Mint, & Cinnamon)",
+    "type": "infusion",
+    "indications": ["digestive distress", "high cortisol", "burnout", "insomnia"],
+    "preparation": "Steep grated ginger, fresh field mint, and a stick of cinnamon in boiling water for 7 minutes. Drink warm before sleep.",
+    "scientificBasis": "Gingerols and menthol soothe the gastrointestinal tract and lower systemic stress hormone levels.",
+    "warning": "None."
+  },
+  {
+    "id": "kibe_massage",
+    "name": "Clarified Kibe Somatic Grounding",
+    "type": "somatic therapy",
+    "indications": ["neck pain", "backache", "musculoskeletal stiffness", "poor posture"],
+    "preparation": "Warm spiced clarified butter (kibe) massaged into the cervical spine (neck) and lumbar region, followed by a hot compress.",
+    "scientificBasis": "Spiced butter contains anti-inflammatory compounds that penetrate cutaneous tissue and increase muscle elasticity.",
+    "warning": "Ensure butter is warm, not hot."
+  }
+]

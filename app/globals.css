@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sans: var(--font-inter), system-ui, sans-serif;
+    --font-serif: var(--font-playfair), Georgia, serif;
+  }
+}
+
+/* Custom pulsing keyframes for the luxury Bio-Orb */
+@keyframes orb-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 40px rgba(197, 168, 128, 0.4), inset 0 0 20px rgba(197, 168, 128, 0.2);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 70px rgba(197, 168, 128, 0.8), inset 0 0 35px rgba(230, 197, 148, 0.5);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 40px rgba(197, 168, 128, 0.4), inset 0 0 20px rgba(197, 168, 128, 0.2);
+  }
+}
+
+.animate-orb {
+  animation: orb-pulse 3s infinite ease-in-out;
+}
+
+/* Custom styling for sleek scrollbars in terminal reasoning logs */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0d0a07;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2e2417;
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #c5a880;
+}

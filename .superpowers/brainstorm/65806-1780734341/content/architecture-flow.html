@@ -1,0 +1,38 @@
+<h2>MinkTilet Architecture & Tech Stack</h2>
+<p class="subtitle">A lightweight, high-performance web app deployable to Vercel. Open <a href="http://localhost:52490" target="_blank">http://localhost:52490</a> to view.</p>
+
+<div class="mockup">
+  <div class="mockup-header" style="background: #110e0a; color: #c5a880; border-bottom: 1px solid #2e2417;">
+    SYSTEM ARCHITECTURE
+  </div>
+  <div class="mockup-body" style="background: #0d0a07; padding: 20px; font-family: monospace; font-size: 0.8rem; line-height: 1.6; color: #f5f0eb;">
+    
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+      
+      <!-- FRONTEND / CLIENT -->
+      <div style="background: #15110c; border: 1px solid #2e2417; border-radius: 6px; padding: 15px;">
+        <strong style="color: #c5a880; display: block; margin-bottom: 10px;">📱 Client (Next.js / React)</strong>
+        • <strong>Responsive Design:</strong> CSS grid/flexbox adapting instantly from mobile (single-column card view) to desktop (three-panel console).<br>
+        • <strong>Media Capture:</strong> HTML5 Web Audio API (voice recording) + canvas frame extraction (webcam posture check).<br>
+        • <strong>State Machine:</strong> Client-side state storing Reasoning Logs in real-time.
+      </div>
+
+      <!-- BACKEND / SERVERLESS -->
+      <div style="background: #15110c; border: 1px solid #2e2417; border-radius: 6px; padding: 15px;">
+        <strong style="color: #c5a880; display: block; margin-bottom: 10px;">⚡ Vercel Serverless API</strong>
+        • <strong>Google AI Studio Bridge:</strong> Standard Serverless Functions invoking the free-tier SDK.<br>
+        • <strong>Grounding Core:</strong> Ingests prompts and appends local Ethiopian context (fasting schedules, traditional herbal mappings, local air quality).<br>
+        • <strong>Mock Integrations:</strong> Fast local mock endpoints simulating WeVa database, Kuriftu bookings, and Telebirr checkout.
+      </div>
+
+    </div>
+
+    <div style="background: #1a1510; border: 1px solid #c5a880; border-radius: 6px; padding: 15px; margin-top: 15px; display: flex; flex-direction: column; gap: 10px;">
+      <strong style="color: #c5a880;">✨ Key Model Choice: Gemini 1.5 Flash (Google AI Studio Free Tier)</strong>
+      <p style="margin: 0; color: #a39482;">
+        While Gemma 2 (9B/27B) is excellent for pure text, <strong>Gemini 1.5 Flash</strong> is the ultimate hackathon hack. Because it is natively multimodal, it allows our agent to directly ingest PDFs (bloodwork), audio files (voice notes), and photos (skincare ingredients) on the free tier with 0ms pre-processing overhead.
+      </p>
+    </div>
+
+  </div>
+</div>
