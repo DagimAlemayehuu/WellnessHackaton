@@ -40,7 +40,6 @@ export default function Home() {
 
   // Fasting Mode & Credits Wallet
   const [fastingMode, setFastingMode] = useState(false);
-  const [wellCredits, setWellCredits] = useState(400);
 
   // File Uploads
   const [pdfText, setPdfText] = useState("");
@@ -69,6 +68,13 @@ export default function Home() {
     }
   }, [activeTab]);
 
+  // Bind webcam stream to video element when camera is activated
+  useEffect(() => {
+    if (webcamActive && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [webcamActive]);
+
   // Voice recognition
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState("");
@@ -84,11 +90,6 @@ export default function Home() {
   ]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
-
-  // Spa Booking
-  const [showBookingModal, setShowBookingModal] = useState(false);
-  const [paymentStatus, setPaymentStatus] = useState("idle"); // idle, processing, failed, success
-  const [simulatedRetry, setSimulatedRetry] = useState(false);
 
   // Load configuration from localStorage on mount
   useEffect(() => {
@@ -180,9 +181,6 @@ export default function Home() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: "user" } });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
       setWebcamActive(true);
     } catch (err) {
       console.error("Error accessing webcam:", err);
@@ -382,21 +380,6 @@ export default function Home() {
     }
   };
 
-  // Telebirr checkout
-  const handlePayment = () => {
-    setPaymentStatus("processing");
-
-    setTimeout(() => {
-      if (!simulatedRetry) {
-        setPaymentStatus("failed");
-        setSimulatedRetry(true);
-      } else {
-        setPaymentStatus("success");
-        setWellCredits(prev => Math.max(0, prev - 300));
-      }
-    }, 2000);
-  };
-
   // Styles mapping (Strictly monochrome: white, black, grey)
   const themeBg = isDarkMode ? "bg-[#09090b]" : "bg-[#fafafa]";
   const themePanel = isDarkMode ? "bg-[#18181b] border-[#27272a]" : "bg-[#ffffff] border-[#e4e4e7]";
@@ -464,12 +447,11 @@ export default function Home() {
           </button>
         </nav>
 
-        {/* Theme and Wallet (Desktop) */}
+        {/* Theme (Desktop) */}
         <div className="hidden sm:flex items-center gap-4">
           <button onClick={toggleTheme} className="p-1 opacity-70 hover:opacity-100">
             {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
-          <span className="text-xs font-bold">{wellCredits} Credits</span>
         </div>
       </header>
 
@@ -832,19 +814,6 @@ export default function Home() {
                   </label>
                 </div>
 
-                <div className="flex justify-between items-center text-xs border-t pt-4 border-zinc-200 dark:border-zinc-800">
-                  <div>
-                    <span className="block font-bold">Booking checkout test</span>
-                    <span className="text-[10px] text-zinc-500">Test Telebirr booking payments.</span>
-                  </div>
-                  <button 
-                    onClick={() => setShowBookingModal(true)}
-                    className={`px-3 py-1.5 rounded text-xs font-bold transition-all ${themeBtn}`}
-                  >
-                    Open Checkout
-                  </button>
-                </div>
-
               </div>
 
             </div>
@@ -852,109 +821,6 @@ export default function Home() {
 
         </div>
       </main>
-
-
-
-      {/* OVERLAY: BOOKING & CHECKOUT MODAL */}
-      {showBookingModal && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-[#18181b] border border-[#27272a] rounded-xl p-6 flex flex-col gap-5 shadow-2xl text-white">
-            <div>
-              <h3 className="font-serif text-sm font-bold uppercase tracking-wider">Checkout Booking</h3>
-              <p className="text-xs text-zinc-500">Book your spa session at Kuriftu Resort.</p>
-            </div>
-
-            <div className="bg-zinc-955 border border-zinc-800 rounded p-3 flex justify-between items-center text-xs">
-              <span>Swedish Massage & Spiced Kibe Scrub</span>
-              <span className="font-bold">1500 ETB</span>
-            </div>
-
-            <div className="bg-zinc-900/50 border border-zinc-800 p-3 rounded-lg flex justify-between text-xs">
-              <div className="flex flex-col">
-                <span className="font-bold text-zinc-300">Well-Credits Applied</span>
-                <span className="text-[10px] text-zinc-500">1 Credit = 1 ETB</span>
-              </div>
-              <span className="font-bold">-{wellCredits} ETB</span>
-            </div>
-
-            <div className="flex justify-between items-center text-xs border-b border-zinc-800 pb-2">
-              <span className="text-zinc-500">Outstanding cash (Telebirr):</span>
-              <span className="font-bold text-white">{Math.max(0, 1500 - wellCredits)} ETB</span>
-            </div>
-
-            {paymentStatus === "idle" && (
-              <button 
-                onClick={handlePayment}
-                className="w-full bg-white text-black font-bold py-3 rounded-lg text-xs uppercase tracking-wider hover:bg-zinc-200 transition-colors"
-              >
-                Checkout With Telebirr Micro-Loan
-              </button>
-            )}
-
-            {paymentStatus === "processing" && (
-              <div className="flex flex-col items-center gap-2 py-4">
-                <span className="w-8 h-8 rounded-full border-2 border-white border-t-transparent animate-spin"></span>
-                <span className="text-xs animate-pulse">Connecting Telebirr Escrow...</span>
-              </div>
-            )}
-
-            {paymentStatus === "failed" && (
-              <div className="flex flex-col gap-4">
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex gap-2.5 text-xs text-red-400">
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <strong className="block mb-0.5">Gateway Handshake failure</strong>
-                    Interoperability timed out. Caching current ledger.
-                  </div>
-                </div>
-                <button 
-                  onClick={handlePayment}
-                  className="w-full bg-white text-black font-bold py-3 rounded-lg text-xs uppercase tracking-wider hover:bg-zinc-200 transition-all flex items-center justify-center gap-2"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  Activate Smart-Retry API
-                </button>
-              </div>
-            )}
-
-            {paymentStatus === "success" && (
-              <div className="flex flex-col items-center gap-4 text-center py-2">
-                <CheckCircle className="w-10 h-10 text-zinc-300 animate-bounce" />
-                <div>
-                  <h4 className="font-serif text-sm text-zinc-300 font-bold mb-1">Booking Verified</h4>
-                  <p className="text-xs text-zinc-500">Spa voucher synced to WeVa EMR Ledger.</p>
-                </div>
-                <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 font-mono text-[9px] w-full text-zinc-400">
-                  VOUCHER: KR-66219-ETH<br/>
-                  PAYMENT: ESCROW VERIFIED BY VISIONFUND
-                </div>
-                <button 
-                  onClick={() => {
-                    setShowBookingModal(false);
-                    setPaymentStatus("idle");
-                  }}
-                  className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-2 rounded text-xs uppercase transition-colors"
-                >
-                  Close
-                </button>
-              </div>
-            )}
-
-            {paymentStatus !== "processing" && paymentStatus !== "success" && (
-              <button 
-                onClick={() => {
-                  setShowBookingModal(false);
-                  setPaymentStatus("idle");
-                }}
-                className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-500 py-2 rounded text-xs uppercase transition-colors"
-              >
-                Cancel
-              </button>
-            )}
-
-          </div>
-        </div>
-      )}
 
     </div>
   );
