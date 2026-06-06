@@ -28,7 +28,7 @@ import {
 
 export default function Home() {
   // Navigation / Tabs
-  const [activeTab, setActiveTab] = useState("chat"); // chat, posture, files, settings
+  const [activeTab, setActiveTab] = useState("chat"); // chat, posture, files, settings, business
   const [isDarkMode, setIsDarkMode] = useState(true);
 
   // API Config (saved to localStorage)
@@ -40,6 +40,51 @@ export default function Home() {
 
   // Fasting Mode & Credits Wallet
   const [fastingMode, setFastingMode] = useState(false);
+
+  // Business Model Features
+  const [activeBusinessSubTab, setActiveBusinessSubTab] = useState("sme"); // sme, cbhi, marketplace, hew
+  const [isHewCertified, setIsHewCertified] = useState(false);
+  const [hewFaydaId, setHewFaydaId] = useState("");
+  const [clinicalMode, setClinicalMode] = useState(false);
+
+  // SME Bundle state
+  const [smeEnrollmentList, setSmeEnrollmentList] = useState([
+    { id: "SME-001", name: "Kotebe Leather Cooperative", size: 45, premium: "1,350 ETB/mo", status: "Active" },
+    { id: "SME-002", name: "Bole Edir Society", size: 120, premium: "3,600 ETB/mo", status: "Active" }
+  ]);
+  const [ussdStep, setUssdStep] = useState(0); // 0: closed, 1: main menu, 2: enter name, 3: enter members, 4: confirmation, 5: success
+  const [ussdInput, setUssdInput] = useState("");
+  const [ussdCoopName, setUssdCoopName] = useState("");
+  const [ussdCoopMembers, setUssdCoopMembers] = useState("");
+  const [ussdFeedback, setUssdFeedback] = useState("");
+
+  // CBHI state
+  const [cbhiEnrollments, setCbhiEnrollments] = useState([
+    { policyId: "CBHI-ET-9021", name: "Abebe Bekele", members: 5, region: "Oromia / Bishoftu", status: "Approved", premium: "240 ETB/yr" }
+  ]);
+  const [cbhiName, setCbhiName] = useState("");
+  const [cbhiFaydaId, setCbhiFaydaId] = useState("");
+  const [cbhiMembers, setCbhiMembers] = useState("4");
+  const [cbhiRegion, setCbhiRegion] = useState("Amhara / Dejen");
+  const [cbhiTelebirrPhone, setCbhiTelebirrPhone] = useState("");
+  const [cbhiPaymentStep, setCbhiPaymentStep] = useState("idle"); // idle, paying, success
+  const [cbhiSearchQuery, setCbhiSearchQuery] = useState("");
+  const [cbhiSearchResult, setCbhiSearchResult] = useState(null);
+
+  // Marketplace state
+  const [marketplaceConsent, setMarketplaceConsent] = useState(false);
+  const [accruedVouchers, setAccruedVouchers] = useState(0); // ETB
+  const [marketplaceTransactions, setMarketplaceTransactions] = useState([
+    { id: "TX-9901", buyer: "Nile Insurance Corp", type: "Stress Indices", date: "2026-06-05", value: "4,500 ETB" },
+    { id: "TX-9902", buyer: "Ministry of Health", type: "Ergonomic Trends", date: "2026-06-06", value: "12,000 ETB" }
+  ]);
+  const [shareDataFeedback, setShareDataFeedback] = useState("");
+
+  // HEW state
+  const [hewQuizAnswers, setHewQuizAnswers] = useState({ q1: "", q2: "", q3: "" });
+  const [hewQuizChecked, setHewQuizChecked] = useState(false);
+  const [hewQuizSuccess, setHewQuizSuccess] = useState(false);
+  const [hewFeedback, setHewFeedback] = useState("");
 
   // File Uploads
   const [pdfText, setPdfText] = useState("");
@@ -136,7 +181,7 @@ export default function Home() {
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "text_prompt", payload: "hi", fastingMode, apiKey }),
+        body: JSON.stringify({ type: "text_prompt", payload: "hi", fastingMode, apiKey, isHewCertified }),
       });
       const data = await response.json();
       if (data.success) {
@@ -162,7 +207,7 @@ export default function Home() {
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, payload, fastingMode, apiKey })
+        body: JSON.stringify({ type, payload, fastingMode, apiKey, isHewCertified })
       });
       const data = await response.json();
       setIngestOutput(data.answer);
@@ -221,7 +266,8 @@ export default function Home() {
           imageData: base64Data,
           imageMime: "image/jpeg",
           fastingMode,
-          apiKey
+          apiKey,
+          isHewCertified
         })
       });
       const data = await response.json();
@@ -263,7 +309,8 @@ export default function Home() {
           imageData: base64Data,
           imageMime: "image/jpeg",
           fastingMode,
-          apiKey
+          apiKey,
+          isHewCertified
         })
       });
       const data = await response.json();
@@ -369,7 +416,7 @@ export default function Home() {
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "text_prompt", payload: userMessage, fastingMode, apiKey })
+        body: JSON.stringify({ type: "text_prompt", payload: userMessage, fastingMode, apiKey, isHewCertified })
       });
       const data = await response.json();
       setChatMessages(prev => [...prev, { role: "assistant", content: data.answer }]);
@@ -377,6 +424,180 @@ export default function Home() {
       setChatMessages(prev => [...prev, { role: "assistant", content: "⚠️ Network error." }]);
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  // USSD Simulator Handler
+  const handleUssdSend = (e) => {
+    if (e) e.preventDefault();
+    const val = ussdInput.trim();
+    setUssdInput("");
+    
+    if (ussdStep === 1) {
+      if (val === "1" || val === "2" || val === "3") {
+        let namePrompt = "";
+        if (val === "1") namePrompt = "Enter Edir Group Name:";
+        if (val === "2") namePrompt = "Enter Equb Network Name:";
+        if (val === "3") namePrompt = "Enter Cooperative Name:";
+        setUssdLog(prev => [...prev, `Input: ${val}`, namePrompt]);
+        setUssdStep(2);
+      } else {
+        setUssdLog(prev => [...prev, `Input: ${val}`, "Invalid option. Select 1, 2, or 3."]);
+      }
+      return;
+    }
+    if (ussdStep === 2) {
+      if (val) {
+        setUssdCoopName(val);
+        setUssdLog(prev => [...prev, `Input: ${val}`, "Enter Number of Members:"]);
+        setUssdStep(3);
+      } else {
+        setUssdLog(prev => [...prev, "Name cannot be empty."]);
+      }
+      return;
+    }
+    if (ussdStep === 3) {
+      const num = parseInt(val, 10);
+      if (num > 0) {
+        setUssdCoopMembers(num);
+        const premium = num * 30;
+        setUssdLog(prev => [
+          ...prev, 
+          `Input: ${val}`, 
+          `Confirm monthly premium of ${premium} ETB for ${num} members?\n1. Confirm & Pay via Telebirr\n2. Cancel`
+        ]);
+        setUssdStep(4);
+      } else {
+        setUssdLog(prev => [...prev, "Enter a valid positive integer."]);
+      }
+      return;
+    }
+    if (ussdStep === 4) {
+      if (val === "1") {
+        const newCoop = {
+          id: `SME-0${smeEnrollmentList.length + 1}`,
+          name: ussdCoopName,
+          size: parseInt(ussdCoopMembers, 10),
+          premium: `${parseInt(ussdCoopMembers, 10) * 30} ETB/mo`,
+          status: "Active"
+        };
+        setSmeEnrollmentList(prev => [...prev, newCoop]);
+        setUssdLog(prev => [...prev, `Input: ${val}`, `✓ Registration Complete!\nSME Policy ID: ${newCoop.id}\nActive micro-insurance & Telemed`]);
+        setUssdStep(5);
+      } else {
+        setUssdStep(1);
+        setUssdLog(["-- USSD Session Started (*847#) --", "HuluCares SME Enrollment System. Select Coop Type:", "1. Edir Group", "2. Equb Network", "3. Agriculture/SME Cooperative"]);
+      }
+      return;
+    }
+  };
+
+  const dialUssd = () => {
+    setUssdStep(1);
+    setUssdLog([
+      "-- USSD Session Started (*847#) --",
+      "HuluCares SME Enrollment System. Select Coop Type:",
+      "1. Edir Group",
+      "2. Equb Network",
+      "3. Agriculture/SME Cooperative"
+    ]);
+  };
+
+  // CBHI Handlers
+  const handleCbhiEnroll = (e) => {
+    if (e) e.preventDefault();
+    if (!cbhiName || !cbhiFaydaId || !cbhiTelebirrPhone) {
+      alert("Please fill in all enrollment fields.");
+      return;
+    }
+    setCbhiPaymentStep("paying");
+  };
+  
+  const handleCbhiPaymentSubmit = (e) => {
+    if (e) e.preventDefault();
+    setTimeout(() => {
+      const newPolicyId = `CBHI-ET-${Math.floor(1000 + Math.random() * 9000)}`;
+      const newEnrollment = {
+        policyId: newPolicyId,
+        name: cbhiName,
+        members: parseInt(cbhiMembers, 10),
+        region: cbhiRegion,
+        status: "Approved",
+        premium: `${parseInt(cbhiMembers, 10) * 60} ETB/yr`
+      };
+      setCbhiEnrollments(prev => [...prev, newEnrollment]);
+      setCbhiPaymentStep("success");
+      setCbhiName("");
+      setCbhiFaydaId("");
+      setCbhiTelebirrPhone("");
+    }, 1000);
+  };
+
+  const handleCbhiSearch = (e) => {
+    if (e) e.preventDefault();
+    const result = cbhiEnrollments.find(item => item.policyId.toLowerCase() === cbhiSearchQuery.trim().toLowerCase());
+    if (result) {
+      setCbhiSearchResult(result);
+    } else {
+      setCbhiSearchResult("not_found");
+    }
+  };
+
+  // Data Marketplace Handlers
+  const handleToggleConsent = () => {
+    const nextConsent = !marketplaceConsent;
+    setMarketplaceConsent(nextConsent);
+    if (nextConsent) {
+      setAccruedVouchers(prev => prev + 150);
+      setShareDataFeedback("Consent registered. +150 ETB Telebirr data voucher awarded!");
+    } else {
+      setShareDataFeedback("Consent withdrawn.");
+    }
+    setTimeout(() => setShareDataFeedback(""), 3000);
+  };
+  
+  const redeemVouchers = () => {
+    if (accruedVouchers <= 0) return;
+    alert(`Transferring ${accruedVouchers} ETB to your mobile wallet...`);
+    setAccruedVouchers(0);
+    alert("✓ Telebirr payout successful!");
+  };
+  
+  const simulateB2BSale = () => {
+    const buyers = ["Nile Insurance", "Tsehay Insurance", "Ministry of Health", "Zemen Health Trust"];
+    const types = ["Aggregated Ergonomic Load Indices", "Anonymized Herb Safety Queries", "Addis Workspace Stress Index"];
+    const randomBuyer = buyers[Math.floor(Math.random() * buyers.length)];
+    const randomType = types[Math.floor(Math.random() * types.length)];
+    const randomValue = `${Math.floor(4 + Math.random() * 12) * 1500} ETB`;
+    const newTx = {
+      id: `TX-990${marketplaceTransactions.length + 1}`,
+      buyer: randomBuyer,
+      type: randomType,
+      date: new Date().toISOString().split("T")[0],
+      value: randomValue
+    };
+    setMarketplaceTransactions(prev => [newTx, ...prev]);
+  };
+
+  // HEW Credentials Handlers
+  const checkHewQuiz = (e) => {
+    if (e) e.preventDefault();
+    if (!hewFaydaId.trim()) {
+      setHewFeedback("Fayda ID is required.");
+      return;
+    }
+    const correct1 = hewQuizAnswers.q1 === "tenadam";
+    const correct2 = hewQuizAnswers.q2 === "fayda";
+    const correct3 = hewQuizAnswers.q3 === "forward";
+    
+    setHewQuizChecked(true);
+    if (correct1 && correct2 && correct3) {
+      setHewQuizSuccess(true);
+      setIsHewCertified(true);
+      setHewFeedback("✓ Quiz passed! Credentials bound to Fayda ID.");
+    } else {
+      setHewQuizSuccess(false);
+      setHewFeedback("One or more answers are incorrect. Review materials and try again.");
     }
   };
 
@@ -407,7 +628,7 @@ export default function Home() {
         <nav className={`flex ${isDarkMode ? "bg-[#09090b]" : "bg-[#f4f4f5]"} p-0.5 rounded-lg border ${themeBorder}`}>
           <button 
             onClick={() => setActiveTab("chat")}
-            className={`px-3 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-wider transition-all ${
+            className={`px-2 py-1.5 rounded-md text-[9px] sm:text-[10px] uppercase font-bold tracking-wider transition-all ${
               activeTab === "chat" 
                 ? (isDarkMode ? "bg-[#f4f4f5] text-[#09090b]" : "bg-[#09090b] text-[#ffffff]") 
                 : "opacity-60 hover:opacity-100"
@@ -417,7 +638,7 @@ export default function Home() {
           </button>
           <button 
             onClick={() => setActiveTab("posture")}
-            className={`px-3 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-wider transition-all ${
+            className={`px-2 py-1.5 rounded-md text-[9px] sm:text-[10px] uppercase font-bold tracking-wider transition-all ${
               activeTab === "posture" 
                 ? (isDarkMode ? "bg-[#f4f4f5] text-[#09090b]" : "bg-[#09090b] text-[#ffffff]") 
                 : "opacity-60 hover:opacity-100"
@@ -427,7 +648,7 @@ export default function Home() {
           </button>
           <button 
             onClick={() => setActiveTab("ingest")}
-            className={`px-3 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-wider transition-all ${
+            className={`px-2 py-1.5 rounded-md text-[9px] sm:text-[10px] uppercase font-bold tracking-wider transition-all ${
               activeTab === "ingest" 
                 ? (isDarkMode ? "bg-[#f4f4f5] text-[#09090b]" : "bg-[#09090b] text-[#ffffff]") 
                 : "opacity-60 hover:opacity-100"
@@ -436,8 +657,18 @@ export default function Home() {
             Files
           </button>
           <button 
+            onClick={() => setActiveTab("business")}
+            className={`px-2 py-1.5 rounded-md text-[9px] sm:text-[10px] uppercase font-bold tracking-wider transition-all ${
+              activeTab === "business" 
+                ? (isDarkMode ? "bg-[#f4f4f5] text-[#09090b]" : "bg-[#09090b] text-[#ffffff]") 
+                : "opacity-60 hover:opacity-100"
+            }`}
+          >
+            Business
+          </button>
+          <button 
             onClick={() => setActiveTab("settings")}
-            className={`px-3 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-wider transition-all ${
+            className={`px-2 py-1.5 rounded-md text-[9px] sm:text-[10px] uppercase font-bold tracking-wider transition-all ${
               activeTab === "settings" 
                 ? (isDarkMode ? "bg-[#f4f4f5] text-[#09090b]" : "bg-[#09090b] text-[#ffffff]") 
                 : "opacity-60 hover:opacity-100"
@@ -462,7 +693,12 @@ export default function Home() {
           {/* VIEW 1: FULL SCREEN CHAT */}
           {activeTab === "chat" && (
             <div className="flex-1 flex flex-col justify-between overflow-hidden">
-              
+              {clinicalMode && (
+                <div className="bg-[#c5a880]/10 border border-[#c5a880]/20 p-2.5 rounded-lg text-[10px] text-[#c5a880] flex items-center justify-between mb-3 font-semibold">
+                  <span>✦ CLINICAL AI MODE ACTIVE (HEW Certified)</span>
+                  <span className="text-[9px] bg-[#c5a880] text-black px-1.5 py-0.5 rounded font-mono font-bold">FAYDA BIND</span>
+                </div>
+              )}
               {/* Message History */}
               <div className="flex-1 overflow-y-auto space-y-4 pr-1 mb-4">
                 {chatMessages.map((msg, i) => (
@@ -749,6 +985,540 @@ export default function Home() {
                 </div>
               </div>
 
+            </div>
+          )}
+
+          {/* VIEW 5: BUSINESS & REVENUE INNOVATIONS */}
+          {activeTab === "business" && (
+            <div className="flex-1 flex flex-col gap-6">
+              <div>
+                <h3 className="font-serif text-sm uppercase tracking-wider font-bold mb-1">Business Model & Revenue Innovations</h3>
+                <p className={`text-xs ${themeTextMuted}`}>Anonymized marketplace transaction frameworks, agent systems, and training credentials.</p>
+              </div>
+
+              {/* Subtab Navigation */}
+              <nav className={`flex flex-wrap ${isDarkMode ? "bg-[#09090b]" : "bg-[#f4f4f5]"} p-0.5 rounded-lg border ${themeBorder} mb-2`}>
+                <button 
+                  onClick={() => setActiveBusinessSubTab("sme")}
+                  className={`flex-1 min-w-[80px] px-2.5 py-1.5 rounded-md text-[9px] uppercase font-bold tracking-wider transition-all ${
+                    activeBusinessSubTab === "sme" 
+                      ? (isDarkMode ? "bg-[#f4f4f5] text-[#09090b]" : "bg-[#09090b] text-[#ffffff]") 
+                      : "opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  SME Bundle
+                </button>
+                <button 
+                  onClick={() => setActiveBusinessSubTab("cbhi")}
+                  className={`flex-1 min-w-[80px] px-2.5 py-1.5 rounded-md text-[9px] uppercase font-bold tracking-wider transition-all ${
+                    activeBusinessSubTab === "cbhi" 
+                      ? (isDarkMode ? "bg-[#f4f4f5] text-[#09090b]" : "bg-[#09090b] text-[#ffffff]") 
+                      : "opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  CBHI Portal
+                </button>
+                <button 
+                  onClick={() => setActiveBusinessSubTab("marketplace")}
+                  className={`flex-1 min-w-[80px] px-2.5 py-1.5 rounded-md text-[9px] uppercase font-bold tracking-wider transition-all ${
+                    activeBusinessSubTab === "marketplace" 
+                      ? (isDarkMode ? "bg-[#f4f4f5] text-[#09090b]" : "bg-[#09090b] text-[#ffffff]") 
+                      : "opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  Data Market
+                </button>
+                <button 
+                  onClick={() => setActiveBusinessSubTab("hew")}
+                  className={`flex-1 min-w-[80px] px-2.5 py-1.5 rounded-md text-[9px] uppercase font-bold tracking-wider transition-all ${
+                    activeBusinessSubTab === "hew" 
+                      ? (isDarkMode ? "bg-[#f4f4f5] text-[#09090b]" : "bg-[#09090b] text-[#ffffff]") 
+                      : "opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  HEW Training
+                </button>
+              </nav>
+
+              {/* SME Wellness Bundle tab contents */}
+              {activeBusinessSubTab === "sme" && (
+                <div className="flex flex-col gap-4">
+                  <div className={`border p-4 rounded-lg flex flex-col gap-2.5 ${themeBg} ${themeBorder}`}>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">SME & Cooperative Wellness Bundle</span>
+                    <p className="text-xs leading-normal">
+                      B2B wellness bundle integrating group health micro-insurance (30 ETB/member/month), tele-consultations, and monthly wellness check-ins. Sold directly to edir groups, equb networks, and agriculture cooperatives.
+                    </p>
+
+                    <div className="mt-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider block mb-1">Enrolled Cooperatives & Groups</span>
+                      <div className="space-y-1.5">
+                        {smeEnrollmentList.map(coop => (
+                          <div key={coop.id} className={`p-2.5 border rounded-lg flex justify-between items-center text-xs ${themePanel}`}>
+                            <div>
+                              <strong className="block font-bold">{coop.name}</strong>
+                              <span className="text-[10px] opacity-75">{coop.size} members · {coop.id}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="block font-bold text-zinc-400">{coop.premium}</span>
+                              <span className="inline-flex items-center gap-1 text-[9px] text-green-500 bg-green-500/10 px-1.5 py-0.5 rounded uppercase font-bold">
+                                {coop.status}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* USSD Simulator */}
+                  <div className={`border p-4 rounded-lg flex flex-col gap-3 ${themePanel} relative overflow-hidden`}>
+                    <span className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 text-zinc-400">
+                      <Activity className="w-3.5 h-3.5" />
+                      Interactive USSD Simulator (Enrollment Flow)
+                    </span>
+
+                    {ussdStep === 0 ? (
+                      <div className="py-6 flex flex-col items-center justify-center gap-3">
+                        <p className={`text-xs text-center ${themeTextMuted}`}>
+                          Simulate the offline mobile USSD enrollment protocol used by remote managers to register cooperatives.
+                        </p>
+                        <button 
+                          onClick={dialUssd}
+                          className={`px-4 py-2 rounded text-xs uppercase font-bold tracking-wider ${themeBtn}`}
+                        >
+                          Dial *847# to Begin
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="bg-[#09090b] text-green-400 font-mono p-4 rounded-lg border border-zinc-800 text-xs flex flex-col justify-between min-h-[180px]">
+                        <div className="space-y-1.5 overflow-y-auto max-h-[140px] pr-1">
+                          {ussdLog.map((line, idx) => (
+                            <div key={idx} className={line.startsWith("Input:") ? "text-zinc-400 text-right" : "text-green-400 whitespace-pre-wrap"}>
+                              {line}
+                            </div>
+                          ))}
+                          {ussdFeedback && <div className="text-red-400">{ussdFeedback}</div>}
+                        </div>
+
+                        {ussdStep < 5 ? (
+                          <form onSubmit={handleUssdSend} className="flex gap-2 border-t border-zinc-800 pt-2.5 mt-2">
+                            <span className="text-green-500 self-center">&gt;</span>
+                            <input 
+                              type="text" 
+                              value={ussdInput}
+                              onChange={(e) => setUssdInput(e.target.value)}
+                              placeholder="Enter option/value..." 
+                              className="flex-1 bg-transparent text-green-400 focus:outline-none border-none p-0 text-xs font-mono"
+                              autoFocus
+                            />
+                            <button type="submit" className="text-green-400 hover:text-green-200 uppercase text-[10px] font-bold">
+                              [Send]
+                            </button>
+                          </form>
+                        ) : (
+                          <div className="border-t border-zinc-800 pt-2 mt-2 flex justify-between">
+                            <span className="text-zinc-500">Session closed</span>
+                            <button 
+                              onClick={() => setUssdStep(0)}
+                              className="bg-zinc-900 text-zinc-300 hover:bg-zinc-800 border border-zinc-800 px-2 py-0.5 rounded text-[10px]"
+                            >
+                              Exit
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* CBHI Enrollment Engine tab contents */}
+              {activeBusinessSubTab === "cbhi" && (
+                <div className="flex flex-col gap-4">
+                  <div className={`border p-4 rounded-lg flex flex-col gap-3 ${themeBg} ${themeBorder}`}>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Community-Based Health Insurance (CBHI) Portal</span>
+                      <p className="text-xs leading-normal mt-0.5">
+                        Enroll community families, process digital premium collections via Telebirr, and check payment status instantaneously.
+                      </p>
+                    </div>
+
+                    <form onSubmit={handleCbhiEnroll} className="space-y-3 pt-2">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase">Family Representative Name</label>
+                          <input 
+                            type="text" 
+                            required
+                            value={cbhiName}
+                            onChange={(e) => setCbhiName(e.target.value)}
+                            placeholder="e.g. Almaz Tolossa" 
+                            className={`rounded px-2.5 py-1.5 text-xs focus:outline-none border ${themeInput}`}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase">Fayda National ID</label>
+                          <input 
+                            type="text" 
+                            required
+                            value={cbhiFaydaId}
+                            onChange={(e) => setCbhiFaydaId(e.target.value)}
+                            placeholder="e.g. ET-8829-FAY" 
+                            className={`rounded px-2.5 py-1.5 text-xs focus:outline-none border ${themeInput}`}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase">Beneficiaries</label>
+                          <select 
+                            value={cbhiMembers}
+                            onChange={(e) => setCbhiMembers(e.target.value)}
+                            className={`rounded px-2 py-1.5 text-xs focus:outline-none border ${themeInput}`}
+                          >
+                            <option value="1">1 (Individual)</option>
+                            <option value="3">3 Members</option>
+                            <option value="5">5 Members</option>
+                            <option value="7">7 Members</option>
+                          </select>
+                        </div>
+                        <div className="flex flex-col gap-1 col-span-2">
+                          <label className="text-[10px] font-bold uppercase">Woreda / Region</label>
+                          <input 
+                            type="text" 
+                            value={cbhiRegion}
+                            onChange={(e) => setCbhiRegion(e.target.value)}
+                            placeholder="e.g. Oromia / Adama Woreda 04" 
+                            className={`rounded px-2.5 py-1.5 text-xs focus:outline-none border ${themeInput}`}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold uppercase">Telebirr Wallet Phone Number</label>
+                        <input 
+                          type="tel" 
+                          required
+                          value={cbhiTelebirrPhone}
+                          placeholder="e.g. 0911223344"
+                          onChange={(e) => setCbhiTelebirrPhone(e.target.value)}
+                          className={`rounded px-2.5 py-1.5 text-xs focus:outline-none border ${themeInput}`}
+                        />
+                      </div>
+
+                      <button 
+                        type="submit"
+                        className={`w-full py-2 rounded text-xs uppercase font-bold tracking-wider transition-all ${themeBtn}`}
+                      >
+                        Enroll Family & Request Premium
+                      </button>
+                    </form>
+
+                    {/* Telebirr Payment Dialog Simulation */}
+                    {cbhiPaymentStep === "paying" && (
+                      <div className="mt-3 p-4 border border-zinc-800 bg-[#09090b] rounded-lg text-xs space-y-3">
+                        <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
+                          <span className="font-bold text-[#c5a880] uppercase tracking-widest text-[10px]">telebirr payment request</span>
+                          <span className="text-zinc-500 font-mono text-[9px]">ID: {Math.floor(100000 + Math.random()*900000)}</span>
+                        </div>
+                        <p className="text-[11px] leading-relaxed">
+                          Requesting **{parseInt(cbhiMembers, 10) * 60} ETB** premium for 1-Year CBHI scheme cover. (Bound to Fayda ID: {cbhiFaydaId}).
+                        </p>
+                        <form onSubmit={handleCbhiPaymentSubmit} className="flex gap-2">
+                          <input 
+                            type="password" 
+                            maxLength={5} 
+                            placeholder="Enter 5-digit PIN" 
+                            className={`flex-1 rounded px-2.5 py-1 text-xs bg-zinc-900 border border-zinc-800 text-zinc-200 focus:outline-none font-mono`}
+                            required
+                          />
+                          <button 
+                            type="submit" 
+                            className="bg-[#c5a880] text-black px-4 py-1 rounded text-[10px] font-bold uppercase hover:bg-[#b0936c]"
+                          >
+                            Pay Now
+                          </button>
+                        </form>
+                      </div>
+                    )}
+
+                    {cbhiPaymentStep === "success" && (
+                      <div className="mt-3 p-3.5 bg-green-500/10 border border-green-500/30 text-green-300 rounded-lg text-xs flex items-start gap-2 animate-fade-in">
+                        <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="block mb-0.5">✓ Premium Paid & Scheme Active!</strong>
+                          <span className="text-[10px] opacity-90 block">
+                            Your family is enrolled in the Community scheme. Check policy ID details via the lookup tool below.
+                          </span>
+                          <button onClick={() => setCbhiPaymentStep("idle")} className="text-xs underline text-green-400 mt-2 block hover:text-green-300">
+                            Dismiss
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Claim Status Checker */}
+                  <div className={`border p-4 rounded-lg flex flex-col gap-3 ${themePanel}`}>
+                    <span className="text-[10px] font-bold uppercase tracking-wider">CBHI Policy & Claim Status Lookup</span>
+                    <form onSubmit={handleCbhiSearch} className="flex gap-2">
+                      <input 
+                        type="text" 
+                        value={cbhiSearchQuery}
+                        onChange={(e) => setCbhiSearchQuery(e.target.value)}
+                        placeholder="Enter Policy ID (e.g. CBHI-ET-9021)"
+                        className={`flex-1 rounded px-3 py-1.5 text-xs focus:outline-none border ${themeInput}`}
+                      />
+                      <button 
+                        type="submit" 
+                        className={`px-4 py-1.5 rounded text-xs uppercase font-bold tracking-wider ${themeBtn}`}
+                      >
+                        Search
+                      </button>
+                    </form>
+
+                    {cbhiSearchResult && (
+                      <div className={`p-3 rounded-lg border border-zinc-800 bg-[#09090b]/40 text-xs`}>
+                        {cbhiSearchResult === "not_found" ? (
+                          <span className="text-red-400">Policy not found in CBHI regional directory database.</span>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center border-b border-zinc-900 pb-1.5">
+                              <div>
+                                <span className="font-bold text-[11px] block">{cbhiSearchResult.name}</span>
+                                <span className="text-[9px] text-zinc-500 font-mono">{cbhiSearchResult.policyId}</span>
+                              </div>
+                              <span className="text-[9px] text-green-500 bg-green-500/10 px-1.5 py-0.5 rounded font-bold uppercase">
+                                {cbhiSearchResult.status}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-[10px] text-zinc-400">
+                              <span>Region: **{cbhiSearchResult.region}**</span>
+                              <span>Yearly Premium: **{cbhiSearchResult.premium}**</span>
+                              <span>Family Members: **{cbhiSearchResult.members}**</span>
+                            </div>
+                            <div className="mt-2 pt-2 border-t border-zinc-900 text-[10px]">
+                              <span className="font-bold block text-zinc-300 mb-0.5">Claim History</span>
+                              <span className="text-[9px] text-zinc-500 block">✓ 1 Paid claim (Outpatient health consult - Bole Woreda Clinic)</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Data Marketplace tab contents */}
+              {activeBusinessSubTab === "marketplace" && (
+                <div className="flex flex-col gap-4">
+                  <div className={`border p-4 rounded-lg flex flex-col gap-3 ${themeBg} ${themeBorder}`}>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Wellness Data B2B Exchange Marketplace</span>
+                      <p className="text-xs leading-normal mt-0.5">
+                        Aggregation of population health indicators. Provides insights (cervical load, musculoskeletal stress indexes, herbal application efficacy) to ministry databases and corporate insurers under strict consent parameters.
+                      </p>
+                    </div>
+
+                    <div className={`p-3 border rounded-lg flex justify-between items-center ${themePanel}`}>
+                      <div>
+                        <span className="text-[11px] font-bold block">Contributor Data Monetization Consent</span>
+                        <span className={`text-[9px] ${themeTextMuted}`}>Anonymize and trade your wellness indices. Earn micro-vouchers.</span>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                        <input 
+                          type="checkbox" 
+                          checked={marketplaceConsent}
+                          onChange={handleToggleConsent}
+                          className="sr-only peer" 
+                        />
+                        <div className="w-9 h-5 bg-zinc-300 dark:bg-zinc-800 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-500 dark:after:bg-zinc-400 after:rounded-full after:height-4 after:w-4 after:transition-all peer-checked:bg-zinc-500"></div>
+                      </label>
+                    </div>
+
+                    {shareDataFeedback && (
+                      <div className="text-[10px] text-[#c5a880] animate-pulse font-medium">
+                        {shareDataFeedback}
+                      </div>
+                    )}
+
+                    {marketplaceConsent && (
+                      <div className="p-3 border border-amber-500/20 bg-amber-500/5 rounded-lg flex justify-between items-center text-xs">
+                        <div>
+                          <span>Accrued Data Contribution Vouchers</span>
+                          <strong className="block text-sm font-bold text-amber-500">{accruedVouchers} ETB</strong>
+                        </div>
+                        <button 
+                          onClick={redeemVouchers}
+                          disabled={accruedVouchers <= 0}
+                          className={`px-3 py-1.5 rounded text-[10px] uppercase font-bold tracking-wider disabled:opacity-40 ${themeBtn}`}
+                        >
+                          Redeem Telebirr
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* B2B Insights panel */}
+                  <div className={`border p-4 rounded-lg flex flex-col gap-3 ${themePanel}`}>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">B2B Health Insights Broker Transaction Logs</span>
+                      <button 
+                        onClick={simulateB2BSale}
+                        className="text-[9px] underline uppercase font-bold tracking-wider hover:opacity-80"
+                      >
+                        Simulate Sale
+                      </button>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+                      {marketplaceTransactions.map(tx => (
+                        <div key={tx.id} className="p-2 border border-zinc-900 bg-[#09090b]/50 rounded-lg flex justify-between items-center text-[10px]">
+                          <div>
+                            <span className="font-bold text-zinc-300 block">{tx.type}</span>
+                            <span className="text-zinc-500">{tx.buyer} · {tx.date}</span>
+                          </div>
+                          <span className="font-mono font-bold text-[#c5a880]">{tx.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* HEW Training tab contents */}
+              {activeBusinessSubTab === "hew" && (
+                <div className="flex flex-col gap-4">
+                  <div className={`border p-4 rounded-lg flex flex-col gap-3 ${themeBg} ${themeBorder}`}>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">HEW Digital Skills Micro-Credentialing</span>
+                      <p className="text-xs leading-normal mt-0.5">
+                        Modular clinical literacy training modules empowering Health Extension Workers (HEWs) to integrate digital wellness diagnostics and earn pay upgrades.
+                      </p>
+                    </div>
+
+                    {/* Tutorial slides */}
+                    <div className={`p-3.5 border rounded-lg space-y-2.5 ${themePanel}`}>
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#c5a880]">Module Course: Clinical AI & Somatic Defense</span>
+                      <div className="space-y-1 text-[11px] leading-relaxed">
+                        <div>
+                          <strong className="block text-zinc-300">1. Traditional Medicine Standards:</strong>
+                          <span>Tenadam requires micro-dosage limits (3-4 leaves) to counter inflammatory blood spasms safely. Never exceed during gestational checks.</span>
+                        </div>
+                        <div>
+                          <strong className="block text-zinc-300">2. National Registry & Insurance:</strong>
+                          <span>Always cross-reference and register patients via Fayda ID protocols to speed up CBHI mobile money premium triggers.</span>
+                        </div>
+                        <div>
+                          <strong className="block text-zinc-300">3. Spinal Curvature Metrics:</strong>
+                          <span>Ergonomic scans evaluate cervical deflection angles to diagnose muscle fatigue. Forward head posture is the primary skeletal marker.</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Certification Quiz */}
+                    <form onSubmit={checkHewQuiz} className="space-y-3.5 pt-2">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold uppercase">Bind to Fayda National ID</label>
+                        <input 
+                          type="text" 
+                          required
+                          value={hewFaydaId}
+                          onChange={(e) => setHewFaydaId(e.target.value)}
+                          placeholder="e.g. FAY-HEW-9810" 
+                          className={`rounded px-2.5 py-1.5 text-xs focus:outline-none border ${themeInput}`}
+                        />
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase">Q1: Which herb contains Parthenolide and requires careful dosing?</label>
+                          <select 
+                            value={hewQuizAnswers.q1}
+                            onChange={(e) => setHewQuizAnswers({...hewQuizAnswers, q1: e.target.value})}
+                            className={`rounded px-2 py-1.5 text-xs focus:outline-none border ${themeInput}`}
+                            required
+                          >
+                            <option value="">Select answer...</option>
+                            <option value="moringa">Moringa (Shiferaw)</option>
+                            <option value="tenadam">Tenadam (Rue of Grace)</option>
+                            <option value="damakese">Damakese (Indigenous Ocimum)</option>
+                          </select>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase">Q2: Which identity system maps CBHI micro-insurance registrations?</label>
+                          <select 
+                            value={hewQuizAnswers.q2}
+                            onChange={(e) => setHewQuizAnswers({...hewQuizAnswers, q2: e.target.value})}
+                            className={`rounded px-2 py-1.5 text-xs focus:outline-none border ${themeInput}`}
+                            required
+                          >
+                            <option value="">Select answer...</option>
+                            <option value="kebele">Local Kebele Card</option>
+                            <option value="fayda">Fayda National ID</option>
+                            <option value="passport">Ethiopian Passport</option>
+                          </select>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase">Q3: What skeletal biomarker indicates desk fatigue in neck posture scans?</label>
+                          <select 
+                            value={hewQuizAnswers.q3}
+                            onChange={(e) => setHewQuizAnswers({...hewQuizAnswers, q3: e.target.value})}
+                            className={`rounded px-2 py-1.5 text-xs focus:outline-none border ${themeInput}`}
+                            required
+                          >
+                            <option value="">Select answer...</option>
+                            <option value="lumbar">Lumbar twist curvature</option>
+                            <option value="forward">Forward head posture angle</option>
+                            <option value="patella">Patellar tendon stretch</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {hewFeedback && (
+                        <div className={`p-2 rounded text-xs text-center border font-medium ${
+                          hewQuizSuccess 
+                            ? "bg-green-500/10 text-green-300 border-green-500/20" 
+                            : "bg-red-500/10 text-red-400 border-red-500/20"
+                        }`}>
+                          {hewFeedback}
+                        </div>
+                      )}
+
+                      {!isHewCertified ? (
+                        <button 
+                          type="submit" 
+                          className={`w-full py-2 rounded text-xs uppercase font-bold tracking-wider transition-all ${themeBtn}`}
+                        >
+                          Submit Answers & Verify Credentials
+                        </button>
+                      ) : (
+                        <div className="p-4 border border-zinc-800 bg-[#09090b] rounded-lg text-center text-xs space-y-2">
+                          <span className="font-bold text-[#c5a880] uppercase tracking-widest text-[11px] block">digital credential verified</span>
+                          <span className="text-[10px] text-zinc-400 block font-mono">Holder: {hewFaydaId}</span>
+                          <span className="text-zinc-500 block text-[9px]">Scope: Digital Health Integrator & Clinical Diagnostics Access</span>
+                          
+                          <div className="flex items-center justify-between border-t border-zinc-900 pt-3 mt-3">
+                            <span className="font-bold text-[10px] uppercase tracking-wider text-zinc-300">clinical ai mode</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input 
+                                type="checkbox" 
+                                checked={clinicalMode}
+                                onChange={() => setClinicalMode(!clinicalMode)}
+                                className="sr-only peer" 
+                              />
+                              <div className="w-9 h-5 bg-zinc-300 dark:bg-zinc-800 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-500 dark:after:bg-zinc-400 after:rounded-full after:height-4 after:w-4 after:transition-all peer-checked:bg-[#c5a880]"></div>
+                            </label>
+                          </div>
+                        </div>
+                      )}
+                    </form>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

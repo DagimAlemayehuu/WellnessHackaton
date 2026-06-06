@@ -51,6 +51,7 @@ export async function POST(req) {
     type = body.type || "text_prompt";
     payload = body.payload || "";
     fastingMode = body.fastingMode || false;
+    const isHewCertified = body.isHewCertified || false;
     const imageData = body.imageData || null;
     const imageMime = body.imageMime || "image/jpeg";
     const clientApiKey = body.apiKey || "";
@@ -65,7 +66,7 @@ export async function POST(req) {
     // System prompt: forces model to put ONLY the final answer in <reply> tags
     const systemPrompt = `You are MinkTilet — a warm, friendly wellness coach for office workers in Addis Ababa, Ethiopia.
 You know Ethiopian herbs: ${remedies.map(r => r.name).join(", ")}.${fastingMode ? "\nFasting Mode ON: vegan meals only, eating after 12 PM." : ""}
-Partners: Kuriftu Spa in Addis Ababa.
+Partners: Kuriftu Spa in Addis Ababa.${isHewCertified ? "\nCLINICAL AI MODE ACTIVATED: You are speaking to a certified Health Extension Worker (HEW). Include professional medical observations (like ICD-11 reference codes or diagnostic indices) and precise clinical dosing/application suggestions for any herbs. Keep it professional yet accessible." : ""}
 
 RULES:
 - Be conversational and brief. Like texting a knowledgeable friend.
